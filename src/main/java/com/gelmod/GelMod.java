@@ -2,7 +2,9 @@ package com.gelmod;
 
 import com.gelmod.entity.*;
 import net.minecraft.core.registries.Registries;
+import net.minecraft.world.Difficulty;
 import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.MobCategory;
 import net.minecraft.world.entity.SpawnPlacementTypes;
 import net.minecraft.world.entity.monster.Monster;
@@ -69,7 +71,9 @@ public class GelMod {
 
     private void spawnPlacement(SpawnPlacementRegisterEvent e) {
         e.register(GEL_SLIME.get(), SpawnPlacementTypes.ON_GROUND, Heightmap.Types.MOTION_BLOCKING_NO_LEAVES,
-                (type, level, reason, pos, random) -> Monster.checkMonsterSpawnRules(type, level, reason, pos, random),
+                (type, level, reason, pos, random) -> level.getDifficulty() != Difficulty.PEACEFUL
+                        && Monster.isDarkEnoughToSpawn(level, pos, random)
+                        && Mob.checkMobSpawnRules(type, level, reason, pos, random),
                 SpawnPlacementRegisterEvent.Operation.OR);
     }
 
