@@ -1,9 +1,0 @@
-{
-  "entity.gelmod.gel_slime": "Gel Slime",
-  "entity.gelmod.gel_zombie": "Gel Zombie",
-  "entity.gelmod.gel_mass": "Gel Mass",
-  "entity.gelmod.gel_player": "Gel Player",
-  "item.gelmod.gel_slime_spawn_egg": "Gel Slime Spawn Egg",
-  "item.gelmod.gel_zombie_spawn_egg": "Gel Zombie Spawn Egg",
-  "item.gelmod.gel_player_spawn_egg": "Gel Player Spawn Egg"
-}
