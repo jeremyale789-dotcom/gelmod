@@ -113,11 +113,8 @@ public class GelCombatGoal extends Goal {
         m.getMoveControl().strafe(0f, strafeDir * 0.9f);
     }
 
-    private int cooldownFor(ItemStack s) {
-        if (s.is(ItemTags.AXES)) return 20;
-        if (s.is(ItemTags.SWORDS)) return 12;
-        return 6;
-    }
+    /** Cooldown de golpe: 0.5 segundos = 10 ticks, sin importar el arma. */
+    private int cooldownFor(ItemStack s) { return 10; }
 
     // ---------------------------------------------------------------- arco
     private void ranged(LivingEntity t, Vec3 tv, double dist, boolean sees) {
