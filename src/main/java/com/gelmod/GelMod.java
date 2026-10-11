@@ -29,8 +29,8 @@ public class GelMod {
     public static final double RANGE = 30.0;
     /** Alcance de ataque del clon (bloques). Vanilla = 3. */
     public static final double REACH = 3.5;
-    /** Cooldown entre golpes del clon, en ticks (20 ticks = 1 segundo). */
-    public static final int ATTACK_COOLDOWN_TICKS = 20;
+    /** Cooldown entre golpes del clon, en ticks (20 ticks = 1 segundo; 30 = 1.5 s). */
+    public static final int ATTACK_COOLDOWN_TICKS = 30;
 
     public static final DeferredRegister<EntityType<?>> ENTITIES = DeferredRegister.create(ForgeRegistries.ENTITY_TYPES, ID);
     public static final DeferredRegister<Item> ITEMS = DeferredRegister.create(ForgeRegistries.ITEMS, ID);
@@ -50,10 +50,6 @@ public class GelMod {
 
     public static final RegistryObject<Item> EGG_SLIME = ITEMS.register("gel_slime_spawn_egg",
             () -> new ForgeSpawnEggItem(GEL_SLIME, 0xFF8CC8, 0xD02A7E, new Item.Properties()));
-    public static final RegistryObject<Item> EGG_ZOMBIE = ITEMS.register("gel_zombie_spawn_egg",
-            () -> new ForgeSpawnEggItem(GEL_ZOMBIE, 0x55DD55, 0x2B5F2B, new Item.Properties()));
-    public static final RegistryObject<Item> EGG_PLAYER = ITEMS.register("gel_player_spawn_egg",
-            () -> new ForgeSpawnEggItem(GEL_PLAYER, 0x55DD55, 0xFFFFFF, new Item.Properties()));
 
     public GelMod() {
         IEventBus bus = FMLJavaModLoadingContext.get().getModEventBus();
@@ -81,7 +77,7 @@ public class GelMod {
 
     private void tabs(BuildCreativeModeTabContentsEvent e) {
         if (e.getTabKey() == CreativeModeTabs.SPAWN_EGGS) {
-            e.accept(EGG_SLIME.get()); e.accept(EGG_ZOMBIE.get()); e.accept(EGG_PLAYER.get());
+            e.accept(EGG_SLIME.get());
         }
     }
 }

@@ -1,0 +1,4 @@
+{
+  "parent": "minecraft:item/generated",
+  "textures": { "layer0": "gelmod:item/gel_slime_spawn_egg" }
+}

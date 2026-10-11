@@ -66,6 +66,7 @@ public class GelPlayerRenderer extends LivingEntityRenderer<GelPlayerEntity, Pla
     @Override
     public void render(GelPlayerEntity e, float yaw, float partialTick, PoseStack pose, MultiBufferSource buf, int light) {
         this.model = skin(e).model() == PlayerSkin.Model.SLIM ? slim : wide;
+        this.model.setAllVisible(false);   // el cuerpo lo dibuja GelOverlayLayer (rosa semitransparente)
         this.model.rightArmPose = armPose(e, InteractionHand.MAIN_HAND);
         this.model.leftArmPose = armPose(e, InteractionHand.OFF_HAND);
         super.render(e, yaw, partialTick, pose, buf, light);

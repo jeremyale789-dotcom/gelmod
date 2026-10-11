@@ -1,6 +1,7 @@
 package com.gelmod.entity;
 
 import com.gelmod.GelMod;
+import net.minecraft.core.particles.BlockParticleOption;
 import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.syncher.EntityDataAccessor;
@@ -20,16 +21,16 @@ import net.minecraft.world.entity.ai.goal.target.HurtByTargetGoal;
 import net.minecraft.world.entity.ai.goal.target.NearestAttackableTargetGoal;
 import net.minecraft.world.entity.monster.Monster;
 import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.Level;
 
 /**
- * Fase 1: slime rosa "derretido" que se ARRASTRA. Al notar a un jugador ~3 s empieza a transformarse:
- * se estira, se aplasta en un charco y, a mitad de ese proceso, el Zombi Gelatinoso ya está emergiendo
- * de él (así no hay un cambio brusco).
+ * Fase 1: slime rosa "derretido" que se ARRASTRA. Al notar a un jugador ~3 s se convierte en un huevo que se
+ * mece y se agrieta; al final el huevo "mini explota" y en su lugar emerge el Zombi Gelatinoso.
  */
 public class GelSlimeEntity extends Monster {
-    public static final int MORPH_TOTAL = 30;      // duración de la transformación (ticks)
-    private static final int ZOMBIE_AT = 12;       // en este tick aparece el zombi (ya "semi formado")
+    /** Duración de la transformación (ticks): 8 se convierte en huevo, ~48 se agrieta, al final explota y sale el zombi. */
+    public static final int MORPH_TOTAL = 56;
 
     private static final EntityDataAccessor<Integer> MORPH =
             SynchedEntityData.defineId(GelSlimeEntity.class, EntityDataSerializers.INT);
@@ -98,20 +99,37 @@ public class GelSlimeEntity extends Monster {
         morph++;
         entityData.set(MORPH, morph);
 
-        if (morph % 3 == 0) {
-            sl.sendParticles(ParticleTypes.ITEM_SLIME, getX(), getY() + 0.3, getZ(), 4, 0.35, 0.15, 0.35, 0.03);
+        if (morph == 8) {                                   // el slime ya es un huevo
+            sl.playSound(null, blockPosition(), SoundEvents.SLIME_JUMP, SoundSource.HOSTILE, 1.0f, 1.4f);
+            sl.sendParticles(ParticleTypes.ITEM_SLIME, getX(), getY() + 0.4, getZ(), 10, 0.3, 0.3, 0.3, 0.05);
         }
-        if (morph == ZOMBIE_AT && !zombieSpawned) {
+        if (morph >= 14 && morph < MORPH_TOTAL && (morph - 14) % 8 == 0) {   // crujidos cada vez más agudos
+            float pitch = 0.7f + 0.6f * morph / MORPH_TOTAL;
+            sl.playSound(null, blockPosition(), SoundEvents.TURTLE_EGG_CRACK, SoundSource.HOSTILE, 1.0f, pitch);
+            sl.sendParticles(new BlockParticleOption(ParticleTypes.BLOCK, Blocks.PINK_CONCRETE.defaultBlockState()),
+                    getX(), getY() + 0.6, getZ(), 4, 0.25, 0.3, 0.25, 0.05);
+        }
+        if (morph >= MORPH_TOTAL) burst(sl);
+    }
+
+    /** El huevo "mini explota": aparece el zombi (semi formado) en su lugar y el slime desaparece. */
+    private void burst(ServerLevel sl) {
+        if (!zombieSpawned) {
             zombieSpawned = true;
             GelZombieEntity z = GelMod.GEL_ZOMBIE.get().create(sl);
             if (z != null) {
                 z.moveTo(getX(), getY(), getZ(), getYRot(), 0f);
-                z.beginForming();                          // nace "semi formado" y se va completando
+                z.beginForming();
                 sl.addFreshEntity(z);
-                sl.playSound(null, blockPosition(), SoundEvents.SLIME_JUMP, SoundSource.HOSTILE, 1.2f, 0.5f);
             }
         }
-        if (morph >= MORPH_TOTAL) discard();
+        sl.sendParticles(ParticleTypes.EXPLOSION, getX(), getY() + 0.5, getZ(), 1, 0, 0, 0, 0);               // mini explosión
+        sl.sendParticles(ParticleTypes.POOF, getX(), getY() + 0.5, getZ(), 14, 0.3, 0.3, 0.3, 0.08);
+        sl.sendParticles(new BlockParticleOption(ParticleTypes.BLOCK, Blocks.PINK_CONCRETE.defaultBlockState()),
+                getX(), getY() + 0.6, getZ(), 45, 0.35, 0.35, 0.35, 0.15);                                    // trozos de cáscara
+        sl.playSound(null, blockPosition(), SoundEvents.TURTLE_EGG_BREAK, SoundSource.HOSTILE, 1.5f, 0.9f);
+        sl.playSound(null, blockPosition(), SoundEvents.FIREWORK_ROCKET_BLAST, SoundSource.HOSTILE, 0.6f, 1.5f);
+        discard();
     }
 
     @Override
