@@ -113,8 +113,8 @@ public class GelCombatGoal extends Goal {
         m.getMoveControl().strafe(0f, strafeDir * 0.9f);
     }
 
-    /** Cooldown de golpe: 0.5 segundos = 10 ticks, sin importar el arma. */
-    private int cooldownFor(ItemStack s) { return 10; }
+    /** Cooldown entre golpes (ver GelMod.ATTACK_COOLDOWN_TICKS). */
+    private int cooldownFor(ItemStack s) { return GelMod.ATTACK_COOLDOWN_TICKS; }
 
     // ---------------------------------------------------------------- arco
     private void ranged(LivingEntity t, Vec3 tv, double dist, boolean sees) {

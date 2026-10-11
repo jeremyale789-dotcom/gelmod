@@ -5,6 +5,7 @@ import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.Tag;
 import net.minecraft.network.chat.Component;
+import net.minecraft.util.Mth;
 import net.minecraft.network.syncher.EntityDataAccessor;
 import net.minecraft.network.syncher.EntityDataSerializers;
 import net.minecraft.network.syncher.SynchedEntityData;
@@ -22,6 +23,7 @@ import net.minecraft.world.entity.ai.goal.target.HurtByTargetGoal;
 import net.minecraft.world.entity.ai.goal.target.NearestAttackableTargetGoal;
 import net.minecraft.world.entity.monster.Monster;
 import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
 
 import java.util.Optional;
@@ -31,6 +33,11 @@ import java.util.UUID;
 public class GelPlayerEntity extends Monster {
     private static final EntityDataAccessor<Optional<UUID>> OWNER =
             SynchedEntityData.defineId(GelPlayerEntity.class, EntityDataSerializers.OPTIONAL_UUID);
+
+    /** Duración (ticks) de la animación de "formarse". */
+    public static final int FORM_TICKS = 40;
+    private static final EntityDataAccessor<Integer> FORM =
+            SynchedEntityData.defineId(GelPlayerEntity.class, EntityDataSerializers.INT);
 
     private final SimpleContainer inventory = new SimpleContainer(36);
 
@@ -55,6 +62,7 @@ public class GelPlayerEntity extends Monster {
     protected void defineSynchedData(SynchedEntityData.Builder builder) {
         super.defineSynchedData(builder);
         builder.define(OWNER, Optional.empty());
+        builder.define(FORM, 0);
     }
 
     @Override
@@ -70,6 +78,20 @@ public class GelPlayerEntity extends Monster {
     }
 
     public SimpleContainer getGelInventory() { return inventory; }
+
+    /** Empieza "semi formado": quieto e invulnerable mientras se va completando. */
+    public void beginForming() {
+        entityData.set(FORM, FORM_TICKS);
+        setNoAi(true);
+        setInvulnerable(true);
+    }
+
+    /** 0 = recién empieza a formarse, 1 = completo. Para el renderer. */
+    public float getFormProgress(float partialTick) {
+        int f = entityData.get(FORM);
+        if (f <= 0) return 1f;
+        return Mth.clamp(1f - (f - partialTick) / FORM_TICKS, 0f, 1f);
+    }
 
     public UUID getOwnerId() { return entityData.get(OWNER).orElse(null); }
 
@@ -89,9 +111,27 @@ public class GelPlayerEntity extends Monster {
     @Override
     public void tick() {
         super.tick();
-        if (!level().isClientSide && tickCount % 8 == 0 && level() instanceof ServerLevel sl) {
+        if (level().isClientSide || !(level() instanceof ServerLevel sl)) return;
+        int f = entityData.get(FORM);
+        if (f > 0) {
+            f--;
+            entityData.set(FORM, f);
+            if (f % 2 == 0) sl.sendParticles(ParticleTypes.ITEM_SLIME, getX(), getY() + 0.3, getZ(), 4, 0.35, 0.2, 0.35, 0.03);
+            if (f == 0) { setNoAi(false); setInvulnerable(false); }
+        } else if (tickCount % 8 == 0) {
             sl.sendParticles(ParticleTypes.ITEM_SLIME, getX(), getY() + 1.0, getZ(), 2, 0.25, 0.5, 0.25, 0.0);
         }
+    }
+
+    /** Antes de morir se vacía TODO (inventario y equipo): así es imposible que suelte objetos y los duplique. */
+    @Override
+    public void die(DamageSource source) {
+        inventory.clearContent();
+        for (EquipmentSlot s : new EquipmentSlot[]{EquipmentSlot.MAINHAND, EquipmentSlot.OFFHAND,
+                EquipmentSlot.HEAD, EquipmentSlot.CHEST, EquipmentSlot.LEGS, EquipmentSlot.FEET}) {
+            setItemSlot(s, ItemStack.EMPTY);
+        }
+        super.die(source);
     }
 
     @Override protected SoundEvent getHurtSound(DamageSource s) { return SoundEvents.PLAYER_HURT; }
@@ -103,6 +143,7 @@ public class GelPlayerEntity extends Monster {
         UUID o = getOwnerId();
         if (o != null) tag.putUUID("Owner", o);
         tag.put("GelInv", inventory.createTag(registryAccess()));
+        tag.putInt("Form", entityData.get(FORM));
     }
 
     @Override
@@ -110,5 +151,6 @@ public class GelPlayerEntity extends Monster {
         super.readAdditionalSaveData(tag);
         if (tag.hasUUID("Owner")) entityData.set(OWNER, Optional.of(tag.getUUID("Owner")));
         inventory.fromTag(tag.getList("GelInv", Tag.TAG_COMPOUND), registryAccess());
+        entityData.set(FORM, tag.getInt("Form"));
     }
 }

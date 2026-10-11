@@ -51,6 +51,18 @@ public class GelPlayerRenderer extends LivingEntityRenderer<GelPlayerEntity, Pla
     @Override
     public ResourceLocation getTextureLocation(GelPlayerEntity e) { return skin(e).texture(); }
 
+    /** Al formarse: surge como un montículo de gel que se va alzando hasta tener forma de jugador. */
+    @Override
+    protected void scale(GelPlayerEntity e, PoseStack pose, float partialTick) {
+        float p = e.getFormProgress(partialTick);
+        if (p < 1f) {
+            float k = p * p * (3f - 2f * p);
+            float sy = 0.12f + 0.88f * k + (float) Math.sin(p * 18f) * 0.05f * (1f - p);
+            float sxz = 1.5f - 0.5f * k;
+            pose.scale(sxz, Math.max(0.05f, sy), sxz);
+        }
+    }
+
     @Override
     public void render(GelPlayerEntity e, float yaw, float partialTick, PoseStack pose, MultiBufferSource buf, int light) {
         this.model = skin(e).model() == PlayerSkin.Model.SLIM ? slim : wide;

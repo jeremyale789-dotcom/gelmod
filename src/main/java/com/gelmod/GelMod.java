@@ -27,15 +27,17 @@ public class GelMod {
     public static final String ID = "gelmod";
     /** Radio de detección del Jugador Gelatinoso (bloques). */
     public static final double RANGE = 30.0;
-    /** Alcance del "kill aura" (bloques). Vanilla = 3. */
-    public static final double REACH = 6.0;
+    /** Alcance de ataque del clon (bloques). Vanilla = 3. */
+    public static final double REACH = 3.5;
+    /** Cooldown entre golpes del clon, en ticks (20 ticks = 1 segundo). */
+    public static final int ATTACK_COOLDOWN_TICKS = 20;
 
     public static final DeferredRegister<EntityType<?>> ENTITIES = DeferredRegister.create(ForgeRegistries.ENTITY_TYPES, ID);
     public static final DeferredRegister<Item> ITEMS = DeferredRegister.create(ForgeRegistries.ITEMS, ID);
 
     public static final RegistryObject<EntityType<GelSlimeEntity>> GEL_SLIME = ENTITIES.register("gel_slime",
             () -> EntityType.Builder.<GelSlimeEntity>of(GelSlimeEntity::new, MobCategory.MONSTER)
-                    .sized(0.52f, 0.52f).eyeHeight(0.325f).clientTrackingRange(10).build("gel_slime"));
+                    .sized(0.9f, 0.5f).eyeHeight(0.35f).clientTrackingRange(10).build("gel_slime"));
     public static final RegistryObject<EntityType<GelZombieEntity>> GEL_ZOMBIE = ENTITIES.register("gel_zombie",
             () -> EntityType.Builder.<GelZombieEntity>of(GelZombieEntity::new, MobCategory.MONSTER)
                     .sized(0.6f, 1.95f).eyeHeight(1.74f).clientTrackingRange(8).build("gel_zombie"));
@@ -47,7 +49,7 @@ public class GelMod {
                     .sized(0.6f, 1.8f).eyeHeight(1.62f).clientTrackingRange(10).build("gel_player"));
 
     public static final RegistryObject<Item> EGG_SLIME = ITEMS.register("gel_slime_spawn_egg",
-            () -> new ForgeSpawnEggItem(GEL_SLIME, 0x55DD55, 0x1E7A2E, new Item.Properties()));
+            () -> new ForgeSpawnEggItem(GEL_SLIME, 0xFF8CC8, 0xD02A7E, new Item.Properties()));
     public static final RegistryObject<Item> EGG_ZOMBIE = ITEMS.register("gel_zombie_spawn_egg",
             () -> new ForgeSpawnEggItem(GEL_ZOMBIE, 0x55DD55, 0x2B5F2B, new Item.Properties()));
     public static final RegistryObject<Item> EGG_PLAYER = ITEMS.register("gel_player_spawn_egg",
@@ -63,7 +65,7 @@ public class GelMod {
     }
 
     private void attributes(EntityAttributeCreationEvent e) {
-        e.put(GEL_SLIME.get(), Monster.createMonsterAttributes().build());
+        e.put(GEL_SLIME.get(), GelSlimeEntity.createAttributes().build());
         e.put(GEL_MASS.get(), Monster.createMonsterAttributes().build());
         e.put(GEL_ZOMBIE.get(), GelZombieEntity.createGelAttributes().build());
         e.put(GEL_PLAYER.get(), GelPlayerEntity.createAttributes().build());

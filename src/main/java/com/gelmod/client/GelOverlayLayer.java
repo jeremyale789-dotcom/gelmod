@@ -17,7 +17,10 @@ public class GelOverlayLayer extends RenderLayer<GelPlayerEntity, PlayerModel<Ge
     public void render(PoseStack pose, MultiBufferSource buf, int light, GelPlayerEntity e,
                        float limbSwing, float limbSwingAmount, float partialTick, float ageInTicks, float netHeadYaw, float headPitch) {
         if (e.isInvisible()) return;
+        float p = e.getFormProgress(partialTick);                 // 0 = recién formándose, 1 = completo
+        int alpha = (int) (255 - (255 - 0x9A) * p);                // al inicio es gel opaco; luego deja ver la skin
+        int color = (alpha << 24) | 0x60FF70;                      // ARGB verde gelatina
         getParentModel().renderToBuffer(pose, buf.getBuffer(RenderType.entityTranslucent(renderer.getTextureLocation(e))),
-                light, LivingEntityRenderer.getOverlayCoords(e, 0f), 0x9A60FF70); // ARGB verde gelatina
+                light, LivingEntityRenderer.getOverlayCoords(e, 0f), color);
     }
 }
