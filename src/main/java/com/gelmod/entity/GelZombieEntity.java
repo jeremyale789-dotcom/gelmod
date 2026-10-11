@@ -14,6 +14,7 @@ import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.ai.attributes.AttributeSupplier;
+import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.entity.monster.Zombie;
 import net.minecraft.world.level.Level;
 
@@ -73,7 +74,10 @@ public class GelZombieEntity extends Zombie {
         entityData.set(FORM, tag.getInt("Form"));
     }
 
-    public static AttributeSupplier.Builder createGelAttributes() { return Zombie.createAttributes(); }
+    /** Zombi normal con el DOBLE de velocidad (0.23 x 2 = 0.46). */
+    public static AttributeSupplier.Builder createGelAttributes() {
+        return Zombie.createAttributes().add(Attributes.MOVEMENT_SPEED, 0.46);
+    }
 
     @Override
     protected boolean isSunSensitive() { return false; }

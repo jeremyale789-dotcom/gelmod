@@ -7,6 +7,7 @@ import net.minecraft.commands.Commands;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.MobSpawnType;
 import net.minecraftforge.event.RegisterCommandsEvent;
+import net.minecraftforge.event.server.ServerStartedEvent;
 import net.minecraftforge.event.entity.living.MobSpawnEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
@@ -14,6 +15,8 @@ import net.minecraftforge.fml.common.Mod;
 /**
  * Comando:  /gelmod spawn            -> muestra el estado
  *           /gelmod spawn true|false -> activa/desactiva el spawn natural del Slime Gelatinoso en el overworld
+ *           /gelmod daytime            -> muestra si puede aparecer de día
+ *           /gelmod daytime true|false -> permite (true) o impide (false) que aparezca de día (false = solo en oscuridad)
  * (Los huevos de spawn y /summon siguen funcionando siempre.)
  */
 @Mod.EventBusSubscriber(modid = GelMod.ID)
@@ -35,8 +38,25 @@ public class GelEvents {
                                     GelSettings.get(ctx.getSource().getServer()).setNaturalSpawn(v);
                                     msg(ctx.getSource(), "Spawn natural del Slime Gelatinoso: " + (v ? "ACTIVADO" : "DESACTIVADO"));
                                     return 1;
+                                })))
+                .then(Commands.literal("daytime")
+                        .executes(ctx -> {
+                            boolean on = GelSettings.get(ctx.getSource().getServer()).isDaySpawn();
+                            msg(ctx.getSource(), "Aparecer de día: " + (on ? "SÍ" : "NO (solo en oscuridad)"));
+                            return on ? 1 : 0;
+                        })
+                        .then(Commands.argument("activado", BoolArgumentType.bool())
+                                .executes(ctx -> {
+                                    boolean v = BoolArgumentType.getBool(ctx, "activado");
+                                    GelSettings.get(ctx.getSource().getServer()).setDaySpawn(v);
+                                    msg(ctx.getSource(), "Aparecer de día: " + (v ? "SÍ" : "NO (solo en oscuridad)"));
+                                    return 1;
                                 }))));
     }
+
+    /** Carga los ajustes guardados al iniciar el mundo (para que la regla de spawn use el valor correcto). */
+    @SubscribeEvent
+    public static void started(ServerStartedEvent e) { GelSettings.get(e.getServer()); }
 
     private static void msg(CommandSourceStack src, String text) {
         src.sendSuccess(() -> Component.literal(text), true);

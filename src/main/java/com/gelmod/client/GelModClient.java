@@ -13,7 +13,7 @@ public class GelModClient {
         e.registerLayerDefinition(GelMassModel.LAYER, GelMassModel::createBodyLayer);
         e.registerLayerDefinition(GelSlimeModel.INNER, () -> GelSlimeModel.createLayer(false));
         e.registerLayerDefinition(GelSlimeModel.OUTER, () -> GelSlimeModel.createLayer(true));
-        e.registerLayerDefinition(GelEggModel.LAYER, GelEggModel::createLayer);
+        e.registerLayerDefinition(GelCocoonModel.LAYER, GelCocoonModel::createLayer);
     }
 
     @SubscribeEvent

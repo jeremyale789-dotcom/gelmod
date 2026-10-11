@@ -25,12 +25,18 @@ import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.Level;
 
 /**
- * Fase 1: slime rosa "derretido" que se ARRASTRA. Al notar a un jugador ~3 s se convierte en un huevo que se
- * mece y se agrieta; al final el huevo "mini explota" y en su lugar emerge el Zombi Gelatinoso.
+ * Fase 1: slime rosa "derretido" que se ARRASTRA (20 corazones). Al notar a un jugador ~3 s se transforma:
+ * charco -> dos tentáculos con cara -> masa grande -> la masa se abre y emerge el Zombi Gelatinoso.
  */
 public class GelSlimeEntity extends Monster {
-    /** Duración de la transformación (ticks): 8 se convierte en huevo, ~48 se agrieta, al final explota y sale el zombi. */
-    public static final int MORPH_TOTAL = 56;
+    // Línea de tiempo de la transformación (ticks), según el concepto:
+    //   0-8   el slime se aplasta como un charco con cara
+    //   8-34  brotan dos tentáculos con cara
+    //   34-58 los tentáculos se funden en una masa grande
+    //   58-72 la masa tiembla y se agrieta
+    //   72    la masa se abre: sale el zombi (semi formado) con una mini explosión
+    //   72-92 lo que queda de la masa se desploma y desaparece
+    public static final int T_FLAT = 8, T_TEND_END = 34, T_MERGE_END = 58, T_BURST = 72, T_END = 92;
 
     private static final EntityDataAccessor<Integer> MORPH =
             SynchedEntityData.defineId(GelSlimeEntity.class, EntityDataSerializers.INT);
@@ -42,7 +48,7 @@ public class GelSlimeEntity extends Monster {
 
     public static AttributeSupplier.Builder createAttributes() {
         return Monster.createMonsterAttributes()
-                .add(Attributes.MAX_HEALTH, 6.0)
+                .add(Attributes.MAX_HEALTH, 40.0)   // 20 corazones
                 .add(Attributes.MOVEMENT_SPEED, 0.16)   // lento: se arrastra
                 .add(Attributes.ATTACK_DAMAGE, 1.0)
                 .add(Attributes.FOLLOW_RANGE, 16.0);
@@ -54,11 +60,10 @@ public class GelSlimeEntity extends Monster {
         builder.define(MORPH, 0);
     }
 
-    /** Progreso de la transformación 0..1 (0 = normal). Para el renderer. */
-    public float getMorphProgress(float partialTick) {
+    /** Ticks transcurridos de la transformación (0 = normal), con parte fraccionaria. Para el renderer. */
+    public float getMorphTicks(float partialTick) {
         int m = entityData.get(MORPH);
-        if (m <= 0) return 0f;
-        return Mth.clamp((m + partialTick) / MORPH_TOTAL, 0f, 1f);
+        return m <= 0 ? 0f : m + partialTick;
     }
 
     @Override
@@ -98,38 +103,50 @@ public class GelSlimeEntity extends Monster {
     private void tickMorph(ServerLevel sl, int morph) {
         morph++;
         entityData.set(MORPH, morph);
+        double x = getX(), y = getY(), z = getZ();
 
-        if (morph == 8) {                                   // el slime ya es un huevo
-            sl.playSound(null, blockPosition(), SoundEvents.SLIME_JUMP, SoundSource.HOSTILE, 1.0f, 1.4f);
-            sl.sendParticles(ParticleTypes.ITEM_SLIME, getX(), getY() + 0.4, getZ(), 10, 0.3, 0.3, 0.3, 0.05);
+        if (morph == T_FLAT) {                                                   // se aplasta: empiezan los tentáculos
+            sl.playSound(null, blockPosition(), SoundEvents.SLIME_JUMP, SoundSource.HOSTILE, 1.0f, 1.2f);
+            sl.sendParticles(ParticleTypes.ITEM_SLIME, x, y + 0.3, z, 10, 0.4, 0.2, 0.4, 0.05);
         }
-        if (morph >= 14 && morph < MORPH_TOTAL && (morph - 14) % 8 == 0) {   // crujidos cada vez más agudos
-            float pitch = 0.7f + 0.6f * morph / MORPH_TOTAL;
-            sl.playSound(null, blockPosition(), SoundEvents.TURTLE_EGG_CRACK, SoundSource.HOSTILE, 1.0f, pitch);
+        if (morph > T_FLAT && morph <= T_TEND_END && morph % 6 == 0) {           // brotan los tentáculos
+            sl.playSound(null, blockPosition(), SoundEvents.SLIME_SQUISH_SMALL, SoundSource.HOSTILE, 1.0f, 0.7f + 0.5f * morph / T_TEND_END);
+            sl.sendParticles(ParticleTypes.ITEM_SLIME, x, y + 0.8, z, 4, 0.4, 0.5, 0.4, 0.03);
+        }
+        if (morph > T_TEND_END && morph <= T_MERGE_END && morph % 5 == 0) {      // se funden en la masa
+            sl.playSound(null, blockPosition(), SoundEvents.SLIME_SQUISH, SoundSource.HOSTILE, 1.3f, 0.5f);
+            sl.sendParticles(ParticleTypes.ITEM_SLIME, x, y + 1.0, z, 6, 0.5, 0.7, 0.5, 0.04);
+        }
+        if (morph > T_MERGE_END && morph < T_BURST && morph % 4 == 0) {          // crujidos antes de abrirse
+            float pitch = 0.7f + 0.8f * (morph - T_MERGE_END) / (T_BURST - T_MERGE_END);
+            sl.playSound(null, blockPosition(), SoundEvents.TURTLE_EGG_CRACK, SoundSource.HOSTILE, 1.1f, pitch);
             sl.sendParticles(new BlockParticleOption(ParticleTypes.BLOCK, Blocks.PINK_CONCRETE.defaultBlockState()),
-                    getX(), getY() + 0.6, getZ(), 4, 0.25, 0.3, 0.25, 0.05);
+                    x, y + 1.0, z, 5, 0.5, 0.7, 0.5, 0.05);
         }
-        if (morph >= MORPH_TOTAL) burst(sl);
+        if (morph == T_BURST) burst(sl);
+        if (morph > T_BURST && morph % 3 == 0) {                                 // restos de la masa derritiéndose
+            sl.sendParticles(ParticleTypes.ITEM_SLIME, x, y + 0.5, z, 3, 0.6, 0.3, 0.6, 0.02);
+        }
+        if (morph >= T_END) discard();
     }
 
-    /** El huevo "mini explota": aparece el zombi (semi formado) en su lugar y el slime desaparece. */
+    /** La masa se abre con una mini explosión y sale el zombi (semi formado). La masa restante se desploma después. */
     private void burst(ServerLevel sl) {
-        if (!zombieSpawned) {
-            zombieSpawned = true;
-            GelZombieEntity z = GelMod.GEL_ZOMBIE.get().create(sl);
-            if (z != null) {
-                z.moveTo(getX(), getY(), getZ(), getYRot(), 0f);
-                z.beginForming();
-                sl.addFreshEntity(z);
-            }
+        if (zombieSpawned) return;
+        zombieSpawned = true;
+        GelZombieEntity z = GelMod.GEL_ZOMBIE.get().create(sl);
+        if (z != null) {
+            z.moveTo(getX(), getY(), getZ(), getYRot(), 0f);
+            z.beginForming();
+            sl.addFreshEntity(z);
         }
-        sl.sendParticles(ParticleTypes.EXPLOSION, getX(), getY() + 0.5, getZ(), 1, 0, 0, 0, 0);               // mini explosión
-        sl.sendParticles(ParticleTypes.POOF, getX(), getY() + 0.5, getZ(), 14, 0.3, 0.3, 0.3, 0.08);
+        double x = getX(), y = getY(), zz = getZ();
+        sl.sendParticles(ParticleTypes.EXPLOSION, x, y + 0.8, zz, 1, 0, 0, 0, 0);                       // mini explosión
+        sl.sendParticles(ParticleTypes.POOF, x, y + 0.8, zz, 16, 0.4, 0.4, 0.4, 0.08);
         sl.sendParticles(new BlockParticleOption(ParticleTypes.BLOCK, Blocks.PINK_CONCRETE.defaultBlockState()),
-                getX(), getY() + 0.6, getZ(), 45, 0.35, 0.35, 0.35, 0.15);                                    // trozos de cáscara
-        sl.playSound(null, blockPosition(), SoundEvents.TURTLE_EGG_BREAK, SoundSource.HOSTILE, 1.5f, 0.9f);
+                x, y + 1.0, zz, 50, 0.5, 0.6, 0.5, 0.15);
+        sl.playSound(null, blockPosition(), SoundEvents.SLIME_JUMP, SoundSource.HOSTILE, 1.5f, 0.5f);
         sl.playSound(null, blockPosition(), SoundEvents.FIREWORK_ROCKET_BLAST, SoundSource.HOSTILE, 0.6f, 1.5f);
-        discard();
     }
 
     @Override

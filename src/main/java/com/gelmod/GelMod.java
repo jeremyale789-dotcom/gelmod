@@ -70,7 +70,7 @@ public class GelMod {
     private void spawnPlacement(SpawnPlacementRegisterEvent e) {
         e.register(GEL_SLIME.get(), SpawnPlacementTypes.ON_GROUND, Heightmap.Types.MOTION_BLOCKING_NO_LEAVES,
                 (type, level, reason, pos, random) -> level.getDifficulty() != Difficulty.PEACEFUL
-                        && Monster.isDarkEnoughToSpawn(level, pos, random)
+                        && (GelSettings.DAY_CACHE || Monster.isDarkEnoughToSpawn(level, pos, random))
                         && Mob.checkMobSpawnRules(type, level, reason, pos, random),
                 SpawnPlacementRegisterEvent.Operation.OR);
     }
