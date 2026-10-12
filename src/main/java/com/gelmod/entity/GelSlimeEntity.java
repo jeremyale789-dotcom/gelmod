@@ -137,7 +137,7 @@ public class GelSlimeEntity extends Monster {
         GelZombieEntity z = GelMod.GEL_ZOMBIE.get().create(sl);
         if (z != null) {
             z.moveTo(getX(), getY(), getZ(), getYRot(), 0f);
-            z.beginForming();
+            // el zombi aparece ya normal (sin animación de estirarse): la mini explosión es lo que oculta el cambio
             sl.addFreshEntity(z);
         }
         double x = getX(), y = getY(), zz = getZ();
