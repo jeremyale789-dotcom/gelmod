@@ -1,0 +1,6 @@
+{
+  "parent": "minecraft:item/generated",
+  "textures": {
+    "layer0": "gelmod:item/pink_slime_fragment"
+  }
+}

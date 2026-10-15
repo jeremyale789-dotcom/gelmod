@@ -5,5 +5,6 @@
   "entity.gelmod.gel_player": "Jugador Gelatinoso",
   "item.gelmod.gel_slime_spawn_egg": "Huevo de Slime Gelatinoso",
   "item.gelmod.gel_zombie_spawn_egg": "Huevo de Zombi Gelatinoso",
-  "item.gelmod.gel_player_spawn_egg": "Huevo de Jugador Gelatinoso"
+  "item.gelmod.gel_player_spawn_egg": "Huevo de Jugador Gelatinoso",
+  "item.gelmod.pink_slime_fragment": "Fragmento de slime rosa"
 }

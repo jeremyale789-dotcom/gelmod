@@ -51,6 +51,10 @@ public class GelMod {
     public static final RegistryObject<Item> EGG_SLIME = ITEMS.register("gel_slime_spawn_egg",
             () -> new ForgeSpawnEggItem(GEL_SLIME, 0xFF8CC8, 0xD02A7E, new Item.Properties()));
 
+    /** Fragmento de slime rosa: lo sueltan los mobs gelatinosos. Sirve para fabricar el Combustible Turbo (mod turboarmor). */
+    public static final RegistryObject<Item> PINK_SLIME_FRAGMENT = ITEMS.register("pink_slime_fragment",
+            () -> new Item(new Item.Properties()));
+
     public GelMod() {
         IEventBus bus = FMLJavaModLoadingContext.get().getModEventBus();
         ENTITIES.register(bus);
@@ -76,6 +80,7 @@ public class GelMod {
     }
 
     private void tabs(BuildCreativeModeTabContentsEvent e) {
+        if (e.getTabKey() == CreativeModeTabs.INGREDIENTS) e.accept(PINK_SLIME_FRAGMENT.get());
         if (e.getTabKey() == CreativeModeTabs.SPAWN_EGGS) {
             e.accept(EGG_SLIME.get());
         }
