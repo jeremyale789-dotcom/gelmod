@@ -23,17 +23,23 @@ import net.minecraft.world.phys.Vec3;
 import java.util.EnumSet;
 
 /**
- * Cerebro de combate del Jugador Gelatinoso:
- *  - Aimbot: mira al objetivo cada tick (sin suavizado) y predice su movimiento con el arco.
- *  - Kill aura: golpea hasta GelMod.REACH bloques (con línea de visión).
- *  - Escudo: bloquea entre golpes. Tótem: lo equipa en la mano secundaria con vida baja.
- *  - Arco: lo usa a distancia si tiene arco + flechas. Come manzanas doradas/comida con poca vida.
+ * Cerebro de combate del Jugador Gelatinoso. Comportamiento "de jugador":
+ *  - Se acerca corriendo, se planta y golpea; después del golpe a veces RETROCEDE (golpea y huye) o da un paso lateral corto.
+ *    Ya no da vueltas sin parar alrededor del objetivo.
+ *  - Escudo inteligente: lo levanta cuando el rival empieza a golpear o a disparar, y entre golpes; lo baja para atacar.
+ *  - Con poca vida se aleja con el escudo arriba y COME de verdad (animación de comer, sonido y partículas), y luego vuelve a pelear.
+ *  - Aimbot (mira siempre al objetivo y adelanta el tiro con el arco), kill aura (REACH) y cooldown de golpe (ATTACK_COOLDOWN_TICKS).
+ *  - Equipa tótem con poca vida, elige la mejor arma, usa el arco a distancia.
  */
 public class GelCombatGoal extends Goal {
     private final GelPlayerEntity m;
-    private int attackCd, bowTime, eatCd, gearCd, strafeTime;
+    private int attackCd, bowTime, eatCd, gearCd, tick, blockUntil, modeTicks, mode, fleeTicks;
     private float strafeDir = 1f;
+    private boolean eating, eatGolden;
+    private int eatNutrition;
     private Vec3 lastPos = Vec3.ZERO;
+
+    private static final int NONE = 0, BACK = 1, SIDE = 2;
 
     public GelCombatGoal(GelPlayerEntity mob) {
         this.m = mob;
@@ -43,13 +49,16 @@ public class GelCombatGoal extends Goal {
     @Override public boolean canUse() { LivingEntity t = m.getTarget(); return t != null && t.isAlive(); }
     @Override public boolean canContinueToUse() { return canUse(); }
     @Override public boolean requiresUpdateEveryTick() { return true; }
-    @Override public void start() { lastPos = Vec3.ZERO; bowTime = 0; }
-    @Override public void stop() { m.stopUsingItem(); m.getNavigation().stop(); }
+    @Override public void start() { lastPos = Vec3.ZERO; bowTime = 0; mode = NONE; modeTicks = 0; eating = false; fleeTicks = 0; }
+    @Override public void stop() { m.stopUsingItem(); m.getNavigation().stop(); m.setSprinting(false); eating = false; }
+
+    private float sign() { return m.getRandom().nextBoolean() ? 1f : -1f; }
 
     @Override
     public void tick() {
         LivingEntity t = m.getTarget();
         if (t == null || !t.isAlive()) return;
+        tick++;
 
         Vec3 tv = lastPos == Vec3.ZERO ? Vec3.ZERO : t.position().subtract(lastPos);
         lastPos = t.position();
@@ -57,20 +66,24 @@ public class GelCombatGoal extends Goal {
 
         if (attackCd > 0) attackCd--;
         if (eatCd > 0) eatCd--;
-        if (--gearCd <= 0) { gearCd = 5; manageGear(dist); }
-        if (eatCd == 0) tryEat();
-
-        boolean bow = m.getMainHandItem().is(Items.BOW);
+        if (modeTicks > 0) modeTicks--; else mode = NONE;
         boolean sees = m.hasLineOfSight(t);
+
+        // comer / curarse (tiene prioridad)
+        if (handleEating(t, dist)) { aimAt(t.getEyePosition()); jumpIfStuck(); return; }
+
+        if (--gearCd <= 0) { gearCd = 5; manageGear(dist); }
+        boolean bow = m.getMainHandItem().is(Items.BOW);
 
         Vec3 aim = t.getEyePosition();
         if (bow && m.isUsingItem()) aim = lead(t, tv, dist);
         aimAt(aim);
 
         if (bow) ranged(t, tv, dist, sees); else melee(t, dist, sees);
-
-        if (m.horizontalCollision && m.onGround()) m.getJumpControl().jump();
+        jumpIfStuck();
     }
+
+    private void jumpIfStuck() { if (m.horizontalCollision && m.onGround()) m.getJumpControl().jump(); }
 
     // ---------------------------------------------------------------- aimbot
     private void aimAt(Vec3 p) {
@@ -83,41 +96,115 @@ public class GelCombatGoal extends Goal {
     }
 
     private Vec3 lead(LivingEntity t, Vec3 tv, double dist) {
-        double ticks = dist / 3.0; // velocidad de flecha a carga completa
+        double ticks = dist / 3.0;
         return t.position().add(0, t.getBbHeight() * 0.6, 0).add(tv.x * ticks, 0, tv.z * ticks);
+    }
+
+    // ---------------------------------------------------------------- comer
+    private boolean handleEating(LivingEntity t, double dist) {
+        if (eating) {
+            if (!m.isUsingItem()) { eating = false; eatCd = 100; return false; }
+            if (m.getUseItemRemainingTicks() == 1 && !eatGolden) m.heal(eatNutrition);
+            backAway();                                        // se va alejando mientras come
+            return true;
+        }
+        float hp = m.getHealth();
+        if (eatCd == 0 && hp <= 11f) {
+            int idx = foodIndex();
+            if (idx >= 0) {
+                if (dist >= 4.5 || (hp <= 5f && dist >= 2.5) || fleeTicks > 30) { startEat(idx); fleeTicks = 0; return true; }
+                fleeTicks++;                                   // primero retrocede con el escudo arriba
+                if (m.getOffhandItem().is(Items.SHIELD) && !m.isUsingItem()) m.startUsingItem(InteractionHand.OFF_HAND);
+                backAway();
+                return true;
+            }
+        }
+        fleeTicks = 0;
+        return false;
+    }
+
+    private void startEat(int idx) {
+        ItemStack s = m.getGelInventory().getItem(idx);
+        eatGolden = s.is(Items.GOLDEN_APPLE) || s.is(Items.ENCHANTED_GOLDEN_APPLE);
+        FoodProperties f = s.get(DataComponents.FOOD);
+        eatNutrition = f != null ? f.nutrition() : 2;
+        swap(EquipmentSlot.MAINHAND, idx);                     // la comida pasa a la mano principal
+        m.startUsingItem(InteractionHand.MAIN_HAND);           // animación, sonido y partículas de comer
+        eating = m.isUsingItem();
+        if (!eating) eatCd = 40;
+    }
+
+    private int foodIndex() {
+        SimpleContainer inv = m.getGelInventory();
+        int any = -1;
+        for (int i = 0; i < inv.getContainerSize(); i++) {
+            ItemStack s = inv.getItem(i);
+            if (s.isEmpty()) continue;
+            if (s.is(Items.ENCHANTED_GOLDEN_APPLE) || s.is(Items.GOLDEN_APPLE)) return i;
+            if (any < 0 && s.has(DataComponents.FOOD)) any = i;
+        }
+        return any;
+    }
+
+    private void backAway() {
+        m.getNavigation().stop();
+        m.getMoveControl().strafe(-0.9f, 0f);
     }
 
     // ---------------------------------------------------------------- melee
     private void melee(LivingEntity t, double dist, boolean sees) {
-        if (dist > 3.0) {
-            m.getNavigation().moveTo(t, 1.2);
+        boolean hasShield = m.getOffhandItem().is(Items.SHIELD);
+        boolean ready = dist <= GelMod.REACH && sees && attackCd == 0;
+
+        // --- escudo inteligente: se cubre cuando el rival empieza a golpear / disparar y entre golpes
+        float swing = t.getAttackAnim(1.0f);
+        boolean threat = dist <= 5.5 && ((swing > 0f && swing < 0.75f) || (t.isUsingItem() && t.getUseItem().is(Items.BOW)));
+        if (hasShield && threat) blockUntil = tick + 14;
+        boolean wantBlock = hasShield && !ready && dist <= 6 && (tick < blockUntil || attackCd > 6);
+        if (wantBlock && !m.isUsingItem()) m.startUsingItem(InteractionHand.OFF_HAND);
+        else if (!wantBlock && m.isUsingItem() && m.getUseItem().is(Items.SHIELD)) m.stopUsingItem();
+
+        // --- movimiento
+        if (dist > 7) {
+            m.setSprinting(true);
+            m.getNavigation().moveTo(t, 1.35);
         } else {
-            m.getNavigation().stop();
-            strafe();
+            m.setSprinting(false);
+            if (mode == BACK && modeTicks > 0) {
+                m.getNavigation().stop();
+                m.getMoveControl().strafe(-0.9f, strafeDir * 0.25f);       // retrocede mirando al rival
+            } else if (mode == SIDE && modeTicks > 0) {
+                m.getNavigation().stop();
+                m.getMoveControl().strafe(0.1f, strafeDir * 0.9f);         // paso lateral corto
+            } else if (dist > 3.2) {
+                m.getNavigation().moveTo(t, 1.15);
+                if (dist < 6 && m.onGround() && m.getRandom().nextFloat() < 0.03f) m.getJumpControl().jump();   // salto de aproximación
+            } else if (dist < 1.6) {
+                m.getNavigation().stop();
+                m.getMoveControl().strafe(-0.6f, 0f);
+            } else {
+                m.getNavigation().stop();                                   // se planta y espera su momento
+                if (attackCd > 3 && m.getRandom().nextFloat() < 0.02f) {
+                    mode = SIDE; modeTicks = 10 + m.getRandom().nextInt(10); strafeDir = sign();
+                }
+            }
         }
-        boolean shield = m.getOffhandItem().is(Items.SHIELD);
-        if (dist <= GelMod.REACH && sees && attackCd == 0) {            // kill aura
-            if (m.isUsingItem()) m.stopUsingItem();
+
+        // --- ataque (kill aura)
+        if (ready) {
+            if (m.isUsingItem() && m.getUseItem().is(Items.SHIELD)) m.stopUsingItem();
             m.swing(InteractionHand.MAIN_HAND);
             m.doHurtTarget(t);
-            attackCd = cooldownFor(m.getMainHandItem());
-        } else if (shield && dist <= 8 && attackCd > 3 && !m.isUsingItem()) {
-            m.startUsingItem(InteractionHand.OFF_HAND);                  // bloquea entre golpes
-        } else if (m.isUsingItem() && attackCd <= 3 && m.getUseItem().is(Items.SHIELD)) {
-            m.stopUsingItem();
+            attackCd = GelMod.ATTACK_COOLDOWN_TICKS;
+            if (m.getRandom().nextFloat() < 0.5f) {                         // golpea y retrocede
+                mode = BACK; modeTicks = 8 + m.getRandom().nextInt(7); strafeDir = sign();
+            }
         }
     }
-
-    private void strafe() {
-        if (--strafeTime <= 0) { strafeTime = 15 + m.getRandom().nextInt(25); strafeDir = m.getRandom().nextBoolean() ? 1f : -1f; }
-        m.getMoveControl().strafe(0f, strafeDir * 0.9f);
-    }
-
-    /** Cooldown entre golpes (ver GelMod.ATTACK_COOLDOWN_TICKS). */
-    private int cooldownFor(ItemStack s) { return GelMod.ATTACK_COOLDOWN_TICKS; }
 
     // ---------------------------------------------------------------- arco
     private void ranged(LivingEntity t, Vec3 tv, double dist, boolean sees) {
+        m.setSprinting(false);
         if (dist < 7) {
             Vec3 away = m.position().subtract(t.position()).normalize().scale(8).add(m.position());
             m.getNavigation().moveTo(away.x, away.y, away.z, 1.3);
@@ -125,7 +212,8 @@ public class GelCombatGoal extends Goal {
             m.getNavigation().moveTo(t, 1.1);
         } else {
             m.getNavigation().stop();
-            strafe();
+            if (mode == SIDE && modeTicks > 0) m.getMoveControl().strafe(0.1f, strafeDir * 0.9f);
+            else if (m.getRandom().nextFloat() < 0.04f) { mode = SIDE; modeTicks = 8 + m.getRandom().nextInt(8); strafeDir = sign(); }
         }
         if (sees && findArrow() >= 0) {
             if (!m.isUsingItem()) { m.startUsingItem(InteractionHand.MAIN_HAND); bowTime = 0; }
@@ -144,8 +232,8 @@ public class GelCombatGoal extends Goal {
         Vec3 p = lead(t, tv, dist), from = m.getEyePosition();
         double dx = p.x - from.x, dy = p.y - from.y, dz = p.z - from.z;
         double h = Math.sqrt(dx * dx + dz * dz), flight = h / 3.0;
-        dy += 0.03 * flight * flight; // compensación de caída
-        arrow.shoot(dx, dy, dz, 3.0f, 0.0f); // 0 de dispersión = aimbot
+        dy += 0.03 * flight * flight;
+        arrow.shoot(dx, dy, dz, 3.0f, 0.0f);
         arrow.pickup = AbstractArrow.Pickup.DISALLOWED;
         m.level().addFreshEntity(arrow);
         m.playSound(SoundEvents.ARROW_SHOOT, 1.0f, 1.0f);
@@ -158,7 +246,6 @@ public class GelCombatGoal extends Goal {
         ItemStack off = m.getOffhandItem();
         int totem = find(Items.TOTEM_OF_UNDYING), shield = find(Items.SHIELD);
 
-        // Mano secundaria: tótem con vida baja (o si no hay escudo), si no escudo.
         if (totem >= 0 && !off.is(Items.TOTEM_OF_UNDYING)
                 && (m.getHealth() <= 10f || (shield < 0 && !off.is(Items.SHIELD)))) {
             swap(EquipmentSlot.OFFHAND, totem);
@@ -168,7 +255,6 @@ public class GelCombatGoal extends Goal {
             swap(EquipmentSlot.OFFHAND, shield);
         }
 
-        // Mano principal: arco si está lejos y tiene flechas; si no, la mejor arma cuerpo a cuerpo.
         ItemStack main = m.getMainHandItem();
         int bow = find(Items.BOW);
         boolean hasArrow = findArrow() >= 0;
@@ -217,22 +303,5 @@ public class GelCombatGoal extends Goal {
             if (!s.isEmpty() && s.is(ItemTags.ARROWS)) return i;
         }
         return -1;
-    }
-
-    private void tryEat() {
-        if (m.getHealth() > 12f) return;
-        SimpleContainer inv = m.getGelInventory();
-        int idx = -1; boolean golden = false;
-        for (int i = 0; i < inv.getContainerSize(); i++) {
-            ItemStack s = inv.getItem(i);
-            if (s.is(Items.ENCHANTED_GOLDEN_APPLE) || s.is(Items.GOLDEN_APPLE)) { idx = i; golden = true; break; }
-            if (idx < 0 && s.has(DataComponents.FOOD)) idx = i;
-        }
-        if (idx < 0) return;
-        ItemStack s = inv.getItem(idx);
-        FoodProperties f = s.get(DataComponents.FOOD);
-        s.finishUsingItem(m.level(), m);
-        if (!golden && f != null) m.heal(f.nutrition());
-        eatCd = 50;
     }
 }

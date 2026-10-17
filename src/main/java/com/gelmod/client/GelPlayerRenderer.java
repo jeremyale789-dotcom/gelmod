@@ -29,9 +29,9 @@ public class GelPlayerRenderer extends LivingEntityRenderer<GelPlayerEntity, Pla
     private final PlayerModel<GelPlayerEntity> slim;
 
     public GelPlayerRenderer(EntityRendererProvider.Context ctx) {
-        super(ctx, new PlayerModel<>(ctx.bakeLayer(ModelLayers.PLAYER), false), 0.5f);
+        super(ctx, new GelPlayerModel(ctx.bakeLayer(ModelLayers.PLAYER), false), 0.5f);
         this.wide = this.getModel();
-        this.slim = new PlayerModel<>(ctx.bakeLayer(ModelLayers.PLAYER_SLIM), true);
+        this.slim = new GelPlayerModel(ctx.bakeLayer(ModelLayers.PLAYER_SLIM), true);
         addLayer(new HumanoidArmorLayer<>(this,
                 new HumanoidArmorModel<>(ctx.bakeLayer(ModelLayers.PLAYER_INNER_ARMOR)),
                 new HumanoidArmorModel<>(ctx.bakeLayer(ModelLayers.PLAYER_OUTER_ARMOR)),
